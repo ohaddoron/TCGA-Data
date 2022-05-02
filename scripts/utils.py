@@ -42,7 +42,7 @@ def run_gdc_client_download_on_directory(
 ):
     manifest_files = Path(manifests_directory).glob(manifests_regex_expression)
     commands = sorted(
-        [f'gdc-client download -m {manifest_file} -d {output_directory}' for manifest_file in manifest_files])
+        [f'gdc-client download -m {manifest_file} -d {output_directory} --debug' for manifest_file in manifest_files])
 
     for j in range(max(len(commands) // number_of_concurrent_downloads + 1, 1)):
         procs = [subprocess.Popen(i, shell=True) for i in
