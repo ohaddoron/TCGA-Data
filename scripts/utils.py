@@ -27,7 +27,7 @@ def split_manifest_to_segments(manifest_path: str = typer.Option(..., help='Path
 
     for i, df in enumerate(splits):
         df: pd.DataFrame
-        df.to_csv(os.path.join(output_directory, f'{base_name}_{i}.txt'))
+        df.to_csv(os.path.join(output_directory, f'{base_name}_{i}.txt'), sep='\t', index=False)
 
     return output_directory
 
