@@ -75,15 +75,22 @@ def insert_data(
                                                          'have read/write privileges on the database',
                                                     prompt_required=True),
         db_name: str = typer.Option(..., help='Database name being written to', prompt_required=True),
+        override: bool = typer.Option(...,
+                                      help='If True, the existing collection will be dropped and a new one will be '
+                                           'written instead, otherwise, will attempt to draw all existing patients '
+                                           'names and continue parsing only for missing patients'),
         col_name: str = typer.Option(None, help='Optional collection name. If not provided, "subject" will be used.')
 ):
     col_name = col_name or subject
-    inserter = inserters[subject]
-    inserter(subject=subject,
-             base_dir=base_dir,
-             mongo_connection_string=mongo_connection_string,
-             db_name=db_name,
-             col_name=col_name)
+    inserter: type(AbstractDatabaseInserter) = inserters[subject]
+    inserter(
+        subject=subject,
+        base_dir=base_dir,
+        mongo_connection_string=mongo_connection_string,
+        db_name=db_name,
+        col_name=col_name,
+        override=override
+    )
 
 
 class AbstractDatabaseInserter(ABC):
@@ -111,7 +118,8 @@ class AbstractDatabaseInserter(ABC):
             self.col.drop()
         else:
             existing_patients = self.col.distinct('patient')
-            self.patient_file_map = {key: value for key, value in self.patient_file_map if key not in existing_patients}
+            self.patient_file_map = {key: value for key, value in self.patient_file_map.items() if
+                                     key not in existing_patients}
 
         indexes = [IndexModel([('name', pymongo.ASCENDING)]),
                    IndexModel([('patient', pymongo.ASCENDING)]),
