@@ -122,3 +122,32 @@ The DNA Methylation data used in the original Multisurv paper was since updated 
 downloaded [here](https://portal.gdc.cancer.gov/repository?filters=%7B%22op%22%3A%22and%22%2C%22content%22%3A%5B%7B%22op%22%3A%22in%22%2C%22content%22%3A%7B%22field%22%3A%22files.data_category%22%2C%22value%22%3A%5B%22dna%20methylation%22%5D%7D%7D%2C%7B%22op%22%3A%22in%22%2C%22content%22%3A%7B%22field%22%3A%22files.data_format%22%2C%22value%22%3A%5B%22txt%22%5D%7D%7D%5D%7D)
 
 Follow the [Manifest Downloading Scheme](#manifest-downloading-scheme) to download the data.
+
+## Inserting Data Into MongoDB
+
+To insert the downloaded data to [MongoDB](https://www.mongodb.com/), use the following:
+
+```shell
+python scripts/utils.py insert-data --subject=<...> --base-dir=<...> --mongo-connection-string=<...> --db-name=<...>
+```
+
+For more help type:
+
+```shell
+python scripts/utils.py insert-data --help 
+>> 
+Options:
+  --subject TEXT                  Omics data type, e.g.: ["mRNA", "DNAm",
+                                  "miRNA"]  [required]
+  --base-dir TEXT                 Directory in which the downloaded files are
+                                  located at. Should conform with the files
+                                  downloaded from the GDC manifest  [required]
+  --mongo-connection-string TEXT  Connection string used to connect to
+                                  MongoDB. Must have read/write privileges on
+                                  the database  [required]
+  --db-name TEXT                  Database name being written to  [required]
+  --col-name TEXT                 Optional collection name. If not provided,
+                                  "subject" will be used.
+  --help                          Show this message and exit.
+```
+
