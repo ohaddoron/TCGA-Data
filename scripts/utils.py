@@ -112,12 +112,20 @@ class mRNADatabaseInserter(AbstractDatabaseInserter):
         with open(file_path) as f:
             reader = csv.reader(f, delimiter='\t')
             data = list(reader)
-            columns = data[1]
-            samples = []
-            for sample, row in enumerate(data[6:]):
-                for i in range(len(row)):
-                    samples.append(
-                        {'name': columns[i], 'value': row[i], 'patient': patient, 'sample': f'{patient}-{sample:05}'})
+        columns = data[1]
+        samples = []
+        for sample, row in enumerate(data[6:]):
+            samples.append(
+                {'name': row[1], 'value': row[-1], 'patient': patient,
+                 'metadata': {columns[0]: row[0],
+                              columns[2]: row[2],
+                              columns[4]: row[4],
+                              columns[5]: row[5],
+                              columns[6]: row[6],
+                              columns[7]: row[7],
+                              }
+                 }
+            )
 
         self.col.insert_many(samples)
 
@@ -175,8 +183,149 @@ class mRNADatabaseInserter(AbstractDatabaseInserter):
         return df
 
 
+class miRNADatabaseInserter(AbstractDatabaseInserter):
+    def insert_patient_data(self, patient: str, file_path: str):
+        with open(file_path) as f:
+            reader = csv.reader(f, delimiter='\t')
+            data = list(reader)
+        columns = data[0]
+        samples = []
+        for sample, row in enumerate(data[6:]):
+            samples.append(
+                {'name': row[0], 'value': row[-2], 'patient': patient,
+                 'metadata': {columns[1]: row[1],
+                              columns[-1]: row[-1],
+                              }
+                 }
+            )
+        self.col.insert_many(samples)
+
+    def request_file_info(self) -> pd.DataFrame:
+        fields = [
+            "file_name",
+            "cases.submitter_id",
+            "cases.samples.sample_type",
+            "cases.project.project_id",
+            "cases.project.primary_site",
+        ]
+
+        fields = ",".join(fields)
+
+        files_endpt = "https://api.gdc.cancer.gov/files"
+
+        filters = {
+            "op": "and",
+            "content": [
+                {
+                    "op": "in",
+                    "content": {
+                        "field": "files.experimental_strategy",
+                        "value": ['miRNA-Seq']
+                    }
+                }
+            ]
+        }
+
+        params = {
+            "filters": filters,
+            "fields": fields,
+            "format": "TSV",
+            "size": "200000"
+        }
+
+        response = requests.post(
+            files_endpt,
+            headers={"Content-Type": "application/json"},
+            json=params)
+
+        df = pd.read_csv(StringIO(response.content.decode("utf-8")), sep="\t")
+        df = df[
+            df['cases.0.project.project_id'].str.startswith('TCGA')]
+        df = df[
+            df['file_name'].str.endswith('mirbase21.mirnas.quantification.txt')]
+        df = df[
+            df['cases.0.samples.0.sample_type'] == 'Primary Tumor']
+
+        # When there is more than one file for a single patient just keep the first
+        # (this is assuming they are just replicates and all similar)
+        df = df[~df.duplicated(
+            subset=['cases.0.submitter_id'], keep='first')]
+
+        return df
+
+
+class DNAMethylationDatabaseInserter(AbstractDatabaseInserter):
+    def insert_patient_data(self, patient: str, file_path: str):
+        with open(file_path) as f:
+            reader = csv.reader(f, delimiter='\t')
+            data = list(reader)
+        samples = []
+        for sample, row in enumerate(data[6:]):
+            samples.append(
+                {'name': row[0], 'value': row[1], 'patient': patient}
+            )
+
+        self.col.insert_many(samples)
+
+    def request_file_info(self) -> pd.DataFrame:
+        fields = [
+            "file_name",
+            "cases.submitter_id",
+            "cases.samples.sample_type",
+            "cases.project.project_id",
+            "cases.project.primary_site",
+        ]
+
+        fields = ",".join(fields)
+
+        files_endpt = "https://api.gdc.cancer.gov/files"
+
+        filters = {
+            "op": "and",
+            "content": [
+                {
+                    "op": "in",
+                    "content": {
+                        "field": "files.experimental_strategy",
+                        "value": ['Methylation Array']
+                    }
+                }
+            ]
+        }
+
+        params = {
+            "filters": filters,
+            "fields": fields,
+            "format": "TSV",
+            "size": "200000"
+        }
+
+        response = requests.post(
+            files_endpt,
+            headers={"Content-Type": "application/json"},
+            json=params)
+
+        df = pd.read_csv(StringIO(response.content.decode("utf-8")), sep="\t")
+        df = df[
+            df['cases.0.project.project_id'].str.startswith('TCGA')]
+        df = df[
+            df['file_name'].str.endswith('methylation_array.sesame.level3betas.txt')]
+        df = df[
+            df['cases.0.samples.0.sample_type'] == 'Primary Tumor']
+
+        # When there is more than one file for a single patient just keep the first
+        # (this is assuming they are just replicates and all similar)
+        df = df[~df.duplicated(
+            subset=['cases.0.submitter_id'], keep='first')]
+
+        return df
+
+
 subjects = dict(mRNA='RNA-Seq')
-inserters = dict(mRNA=mRNADatabaseInserter)
+inserters = dict(mRNA=mRNADatabaseInserter,
+                 miRNA=miRNADatabaseInserter,
+                 DNAm=DNAMethylationDatabaseInserter
+                 )
 
 
 @app.command()
@@ -192,7 +341,7 @@ def insert_data(subject: str = typer.Option(...), base_dir: str = typer.Option(.
              mongo_connection_string=mongo_connection_string,
              db_name=db_name,
              col_name=col_name)
-    
+
 
 if __name__ == '__main__':
     app()
