@@ -87,10 +87,10 @@ class AbstractDatabaseInserter(ABC):
                    IndexModel([('sample', pymongo.ASCENDING), ('patient', pymongo.ASCENDING)])
                    ]
 
-        self.col.create_indexes(indexes)
-
         for patient, file_path in tqdm(self.patient_file_map.items()):
             self.insert_patient_data(patient=patient, file_path=file_path)
+
+        self.col.create_indexes(indexes)
 
     @abstractmethod
     def insert_patient_data(self, patient: str, file_path: str):
