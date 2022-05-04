@@ -131,7 +131,7 @@ class AbstractDatabaseInserter(ABC):
 
         for patient, file_path in tqdm(self.patient_file_map.items()):
             if not Path(file_path).is_file():
-                logger.error(f'Unable to download files for {patient}:{file_path}')
+                logger.error(f'Unable to insert files for {patient}:{file_path}')
                 continue
             self.insert_patient_data(patient=patient, file_path=file_path)
 
@@ -198,7 +198,7 @@ class mRNADatabaseInserter(AbstractDatabaseInserter):
         samples = []
         for sample, row in enumerate(data[6:]):
             samples.append(
-                {'name': row[1], 'value': row[-1], 'patient': patient,
+                {'name': row[1], 'value': float(row[-1]), 'patient': patient,
                  'metadata': {columns[0]: row[0],
                               columns[2]: row[2],
                               columns[4]: row[4],
@@ -237,7 +237,7 @@ class miRNADatabaseInserter(AbstractDatabaseInserter):
         samples = []
         for sample, row in enumerate(data[6:]):
             samples.append(
-                {'name': row[0], 'value': row[-2], 'patient': patient,
+                {'name': row[0], 'value': float(row[-2]), 'patient': patient,
                  'metadata': {columns[1]: row[1],
                               columns[-1]: row[-1],
                               }
@@ -270,7 +270,7 @@ class DNAMethylationDatabaseInserter(AbstractDatabaseInserter):
         samples = []
         for sample, row in enumerate(data[6:]):
             samples.append(
-                {'name': row[0], 'value': row[1], 'patient': patient}
+                {'name': row[0], 'value': float(row[1]), 'patient': patient}
             )
 
         self.col.insert_many(samples)

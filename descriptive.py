@@ -32,6 +32,41 @@ class DataFetcher:
 
             return pd.DataFrame(result)
 
+    def get_variance_for_collection(self, collection_name: str) -> pd.DataFrame:
+        with MongoClient(self._mongodb_connection_string) as client:
+            db = client[self._db_name]
+
+            result = db[collection_name].aggregate(self.pipeline_for_variance_for_collection())
+
+            return pd.DataFrame(result)
+
+    @staticmethod
+    def pipeline_for_variance_for_collection():
+        return [
+            {
+                '$group': {
+                    '_id': '$name',
+                    'stdev': {
+                        '$stdDevPop': '$value'
+                    }
+                }
+            }, {
+                '$addFields': {
+                    'name': '$_id',
+                    'var': {
+                        '$pow': [
+                            '$stdev', 2
+                        ]
+                    }
+                }
+            }, {
+                '$project': {
+                    '_id': 0,
+                    'stdev': 0
+                }
+            }
+        ]
+
     @staticmethod
     def pipeline_for_collection_to_dataframe():
         return [
@@ -94,14 +129,16 @@ class AbstractDashboard(DataFetcher, ABC):
 
 class VarianceDescription(AbstractDashboard):
     def render(self):
-        variance_table = self.get_variance_for_all_names(collection_name=self.modality)
+        super().render()
+        variance_table = self.get_variance_for_collection(collection_name=self.modality)
         st.table(variance_table.describe())
 
 
 class BoxPlotRenderer(AbstractDashboard):
     def render(self):
-        df = self.get_collection_as_dataframe(collection_name=self.modality)
-        fig = px.box(df, x='name', y='value', width=1000)
+        super().render()
+        df = self.get_variance_for_collection(collection_name=self.modality)
+        fig = px.box(df, y='var')
         st.plotly_chart(fig)
 
 
