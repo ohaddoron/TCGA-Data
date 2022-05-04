@@ -69,7 +69,7 @@ class AbstractDatabaseInserter(ABC):
         self.mongo_connection_string = mongo_connection_string
         self.db_name = db_name
 
-        self.info = self.request_file_info()
+        self.info = self.request_file_info(data_type=subjects[self.subject])
         logger.debug(self.info.head())
         self.patient_file_map = self.make_patient_file_map(self.info, base_dir)
         client = pymongo.MongoClient(mongo_connection_string)
@@ -96,9 +96,46 @@ class AbstractDatabaseInserter(ABC):
     def insert_patient_data(self, patient: str, file_path: str):
         ...
 
-    @abstractmethod
-    def request_file_info(self) -> pd.DataFrame:
-        ...
+    def request_file_info(self, data_type: str) -> pd.DataFrame:
+        fields = [
+            "file_name",
+            "cases.submitter_id",
+            "cases.samples.sample_type",
+            "cases.project.project_id",
+            "cases.project.primary_site",
+        ]
+
+        fields = ",".join(fields)
+
+        files_endpt = "https://api.gdc.cancer.gov/files"
+
+        filters = {
+            "op": "and",
+            "content": [
+                {
+                    "op": "in",
+                    "content": {
+                        "field": "files.experimental_strategy",
+                        "value": [data_type]
+                    }
+                }
+            ]
+        }
+
+        params = {
+            "filters": filters,
+            "fields": fields,
+            "format": "TSV",
+            "size": "200000"
+        }
+
+        response = requests.post(
+            files_endpt,
+            headers={"Content-Type": "application/json"},
+            json=params)
+
+        df = pd.read_csv(StringIO(response.content.decode("utf-8")), sep="\t")
+        return df
 
     @staticmethod
     def make_patient_file_map(df, base_dir):
@@ -129,45 +166,8 @@ class mRNADatabaseInserter(AbstractDatabaseInserter):
 
         self.col.insert_many(samples)
 
-    def request_file_info(self) -> pd.DataFrame:
-        fields = [
-            "file_name",
-            "cases.submitter_id",
-            "cases.samples.sample_type",
-            "cases.project.project_id",
-            "cases.project.primary_site",
-        ]
-
-        fields = ",".join(fields)
-
-        files_endpt = "https://api.gdc.cancer.gov/files"
-
-        filters = {
-            "op": "and",
-            "content": [
-                {
-                    "op": "in",
-                    "content": {
-                        "field": "files.experimental_strategy",
-                        "value": ['RNA-Seq']
-                    }
-                }
-            ]
-        }
-
-        params = {
-            "filters": filters,
-            "fields": fields,
-            "format": "TSV",
-            "size": "200000"
-        }
-
-        response = requests.post(
-            files_endpt,
-            headers={"Content-Type": "application/json"},
-            json=params)
-
-        df = pd.read_csv(StringIO(response.content.decode("utf-8")), sep="\t")
+    def request_file_info(self, data_type) -> pd.DataFrame:
+        df = super().request_file_info(data_type=data_type)
         df = df[
             df['cases.0.project.project_id'].str.startswith('TCGA')]
         df = df[
@@ -200,45 +200,8 @@ class miRNADatabaseInserter(AbstractDatabaseInserter):
             )
         self.col.insert_many(samples)
 
-    def request_file_info(self) -> pd.DataFrame:
-        fields = [
-            "file_name",
-            "cases.submitter_id",
-            "cases.samples.sample_type",
-            "cases.project.project_id",
-            "cases.project.primary_site",
-        ]
-
-        fields = ",".join(fields)
-
-        files_endpt = "https://api.gdc.cancer.gov/files"
-
-        filters = {
-            "op": "and",
-            "content": [
-                {
-                    "op": "in",
-                    "content": {
-                        "field": "files.experimental_strategy",
-                        "value": ['miRNA-Seq']
-                    }
-                }
-            ]
-        }
-
-        params = {
-            "filters": filters,
-            "fields": fields,
-            "format": "TSV",
-            "size": "200000"
-        }
-
-        response = requests.post(
-            files_endpt,
-            headers={"Content-Type": "application/json"},
-            json=params)
-
-        df = pd.read_csv(StringIO(response.content.decode("utf-8")), sep="\t")
+    def request_file_info(self, data_type: str) -> pd.DataFrame:
+        df = super(miRNADatabaseInserter, self).request_file_info(data_type=data_type)
         df = df[
             df['cases.0.project.project_id'].str.startswith('TCGA')]
         df = df[
@@ -267,45 +230,8 @@ class DNAMethylationDatabaseInserter(AbstractDatabaseInserter):
 
         self.col.insert_many(samples)
 
-    def request_file_info(self) -> pd.DataFrame:
-        fields = [
-            "file_name",
-            "cases.submitter_id",
-            "cases.samples.sample_type",
-            "cases.project.project_id",
-            "cases.project.primary_site",
-        ]
-
-        fields = ",".join(fields)
-
-        files_endpt = "https://api.gdc.cancer.gov/files"
-
-        filters = {
-            "op": "and",
-            "content": [
-                {
-                    "op": "in",
-                    "content": {
-                        "field": "files.experimental_strategy",
-                        "value": ['Methylation Array']
-                    }
-                }
-            ]
-        }
-
-        params = {
-            "filters": filters,
-            "fields": fields,
-            "format": "TSV",
-            "size": "200000"
-        }
-
-        response = requests.post(
-            files_endpt,
-            headers={"Content-Type": "application/json"},
-            json=params)
-
-        df = pd.read_csv(StringIO(response.content.decode("utf-8")), sep="\t")
+    def request_file_info(self, data_type: str) -> pd.DataFrame:
+        df = super().request_file_info(data_type=data_type)
         df = df[
             df['cases.0.project.project_id'].str.startswith('TCGA')]
         df = df[
@@ -321,7 +247,9 @@ class DNAMethylationDatabaseInserter(AbstractDatabaseInserter):
         return df
 
 
-subjects = dict(mRNA='RNA-Seq')
+subjects = dict(mRNA='RNA-Seq',
+                DNAm='Methylation Array',
+                miRNA='miRNA-Seq')
 inserters = dict(mRNA=mRNADatabaseInserter,
                  miRNA=miRNADatabaseInserter,
                  DNAm=DNAMethylationDatabaseInserter
