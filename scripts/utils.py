@@ -130,6 +130,9 @@ class AbstractDatabaseInserter(ABC):
                    ]
 
         for patient, file_path in tqdm(self.patient_file_map.items()):
+            if not Path(file_path).is_file():
+                logger.error(f'Unable to download files for {patient}:{file_path}')
+                continue
             self.insert_patient_data(patient=patient, file_path=file_path)
 
         self.col.create_indexes(indexes)
