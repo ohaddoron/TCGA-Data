@@ -10,7 +10,7 @@ import requests
 
 import typer
 from loguru import logger
-from pymongo import IndexModel
+from pymongo import IndexModel, MongoClient
 from tqdm import tqdm
 from typer import Typer
 import pandas as pd
@@ -290,6 +290,40 @@ class DNAMethylationDatabaseInserter(AbstractDatabaseInserter):
             subset=['cases.0.submitter_id'], keep='first')]
 
         return df
+
+
+@app.command()
+def generate_variance_table(mongo_connection_string: str = typer.Option(..., help='MongoDB connection string'),
+                            db_name: str = typer.Option(..., help='Database name'),
+                            col_name: str = typer.Option(..., help='Collection to compute variance on'),
+                            output_path: str = typer.Option(None,
+                                                            help="Path to output the resulting variance table. If "
+                                                                 "None, will be printed to stdout and returned"),
+                            override: bool = typer.Option(False,
+                                                          help='If True, will override existing variance table with '
+                                                               'the same name')):
+    def get_values_for_name(name: str):
+        return pd.DataFrame(db[col_name].find({'name': name}))
+
+    p = Path(output_path)
+    if p.exists() and not override:
+        df = pd.read_csv(p, sep='\t')
+        logger.debug(df.head())
+        return df
+    p.mkdir(parents=True, exist_ok=True)
+
+    with MongoClient(mongo_connection_string) as client:
+        logger.debug(client.server_info())
+        db = client[db_name]
+        df = pd.DataFrame([{'name': name, 'Var': get_values_for_name(name=name).value.var()} for name in
+                           tqdm(db[col_name].distinct('name'))])
+
+    df = df.set_index('name')
+    df.index = None
+
+    df.to_csv(p, sep='\t')
+    logger.debug(df.head())
+    return df
 
 
 subjects = dict(mRNA='RNA-Seq',
