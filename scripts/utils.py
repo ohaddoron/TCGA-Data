@@ -301,7 +301,11 @@ def generate_variance_table(mongo_connection_string: str = typer.Option(..., hel
                                                                  "None, will be printed to stdout and returned"),
                             override: bool = typer.Option(False,
                                                           help='If True, will override existing variance table with '
-                                                               'the same name')):
+                                                               'the same name'),
+                            names_file: str = typer.Option(None,
+                                                           help='Path to a preprocessed name file. Used in cases '
+                                                                'where it takes too long to fetch the features for '
+                                                                'the collection')):
     def get_values_for_name(name: str):
         return pd.DataFrame(db[col_name].find({'name': name}))
 
@@ -315,8 +319,14 @@ def generate_variance_table(mongo_connection_string: str = typer.Option(..., hel
     with MongoClient(mongo_connection_string) as client:
         logger.debug(client.server_info())
         db = client[db_name]
+        if names_file:
+            with open(names_file) as f:
+                names = f.read().split('\n')
+
+        else:
+            names = db[col_name].distinct('name')
         df = pd.DataFrame([{'name': name, 'Var': get_values_for_name(name=name).value.var()} for name in
-                           tqdm(db[col_name].distinct('name'))])
+                           tqdm(names)])
 
     df = df.set_index('name')
     df.index.name = None
