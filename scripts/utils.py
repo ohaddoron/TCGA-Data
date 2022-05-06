@@ -319,7 +319,7 @@ def generate_variance_table(mongo_connection_string: str = typer.Option(..., hel
                            tqdm(db[col_name].distinct('name'))])
 
     df = df.set_index('name')
-    df.index = None
+    df.index.name = None
 
     df.to_csv(p, sep='\t')
     logger.debug(df.head())
