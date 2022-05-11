@@ -270,7 +270,7 @@ class DNAMethylationDatabaseInserter(AbstractDatabaseInserter):
         samples = []
         for sample, row in enumerate(data[6:]):
             samples.append(
-                {'name': row[0], 'value': float(row[1]), 'patient': patient}
+                {'name': row[0], 'value': float(row[1]) if row[1].isnumeric() else None, 'patient': patient}
             )
 
         self.col.insert_many(samples)
