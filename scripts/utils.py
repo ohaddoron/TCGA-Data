@@ -128,14 +128,13 @@ class AbstractDatabaseInserter(ABC):
                    IndexModel([('sample', pymongo.ASCENDING), ('name', pymongo.ASCENDING)]),
                    IndexModel([('sample', pymongo.ASCENDING), ('patient', pymongo.ASCENDING)])
                    ]
+        self.col.create_indexes(indexes)
 
         for patient, file_path in tqdm(self.patient_file_map.items()):
             if not Path(file_path).is_file():
                 logger.error(f'Unable to insert files for {patient}:{file_path}')
                 continue
             self.insert_patient_data(patient=patient, file_path=file_path)
-
-        self.col.create_indexes(indexes)
 
     @abstractmethod
     def insert_patient_data(self, patient: str, file_path: str):
@@ -268,9 +267,19 @@ class DNAMethylationDatabaseInserter(AbstractDatabaseInserter):
             reader = csv.reader(f, delimiter='\t')
             data = list(reader)
         samples = []
+
+        def convert_to_float(num: str):
+            try:
+                return float(num)
+            except ValueError:
+                if num == 'NA':
+                    return None
+                else:
+                    raise ValueError
+
         for sample, row in enumerate(data[6:]):
             samples.append(
-                {'name': row[0], 'value': float(row[1]) if row[1].isnumeric() else None, 'patient': patient}
+                {'name': row[0], 'value': convert_to_float(row[1]) if row[1].isnumeric() else None, 'patient': patient}
             )
 
         self.col.insert_many(samples)
