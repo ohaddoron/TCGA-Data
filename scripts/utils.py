@@ -353,5 +353,104 @@ inserters = dict(mRNA=mRNADatabaseInserter,
                  DNAm=DNAMethylationDatabaseInserter
                  )
 
+class AbstractVarianceComputer(ABC):
+    def __init__(self, base_dir: str, ext: str, output_path: str) -> None:
+        self.files = list(self.get_files(base_dir, ext))
+        
+        self.output_path = Path(output_path)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        self.parse_variance()
+        
+    def get_files(self, base_dir: str, ext: str):
+        base_dir = Path(base_dir)
+        assert base_dir.exists()
+        
+        return base_dir.glob(f'**/*.{ext}')
+
+    @staticmethod
+    def tofloat(num):
+        try:
+            return float(num)
+            
+        except ValueError:
+            return None
+    
+    @abstractmethod
+    def parse_file(file) -> dict:
+        ...
+        
+    def parse_variance(self):
+        out = dict()
+        
+        for file in tqdm(self.files):
+            parsed = self.parse_file(file)
+            
+            for key, values in parsed.items():
+                if key not in out:
+                    out[key] = dict(sum=0., ssum=0., count=0)
+                out[key]['sum'] += values['sum']
+                out[key]['ssum'] += values['ssum']
+                out[key]['count'] += values['count']
+    
+    
+            
+        
+class mRNAVarianceComputer(AbstractVarianceComputer):
+    def parse_file(self, file) -> dict:
+        with Path(file).open() as f:
+            reader = csv.reader(f, delimiter='\t')
+        
+            data = list(reader)[6:]
+        out = dict()
+        for item in data:
+            if item[0] not in out.keys():
+                out[item[0]] = dict(sum=0., ssum=0., count=0)
+                
+            val = self.tofloat(item[-1])
+            if val is not None:
+                out[item[0]]['count'] += 1
+                out[item[0]]['sum'] = np.nansum((out[item[0]]['sum'], float(item[-1])))
+                out[item[0]]['ssum'] = np.nansum((out[item[0]]['ssum'], float(item[-1])**2))
+            
+        return out
+    
+class DNAmVarianceComputer(AbstractVarianceComputer):
+    def parse_file(self, file) -> dict:
+        with Path(file).open() as f:
+            reader = csv.reader(f, delimiter='\t')
+            
+            data = list(reader)
+            
+        out = dict()
+        for item in data:
+            if item[0] not in out.keys():
+                out[item[0]] = dict(sum=0., ssum=0., count=0)
+                
+            val = self.tofloat(item[-1])
+            if val is not None:
+                out[item[0]]['count'] += 1
+                out[item[0]]['sum'] = np.nansum((out[item[0]]['sum'], float(item[-1])))
+                out[item[0]]['ssum'] = np.nansum((out[item[0]]['ssum'], float(item[-1])**2))
+            
+        return out
+    
+variance_computers = dict(mRNA=mRNAVarianceComputer,
+                          DNAm=DNAmVarianceComputer)
+
+@app.command()
+def compute_variance(subject: str = typer.Option(..., help='Omics data type, e.g.: ["mRNA", "DNAm", "miRNA"]',
+                                    prompt_required=True),
+                    base_dir: str = typer.Option(...,
+                                     help='Directory in which the downloaded files are located at. Should '
+                                          'conform with the files downloaded from the GDC manifest',
+                                     prompt_required=True),
+                    file_extension: str = typer.Option(..., 
+                                                       help='Extension of the files that should be seeked'),
+                    output_file: str = typer.Option(..., help='Pathway to output the variace compute file')
+                    ):
+    computer = variance_computers[subject](base_dir=base_dir, ext=file_extension, output_path=output_file).parse_variance()
+    
+
 if __name__ == '__main__':
     app()
