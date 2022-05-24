@@ -4,6 +4,7 @@ import subprocess
 from abc import ABC, abstractmethod
 from io import StringIO
 from pathlib import Path
+import json
 
 import pymongo
 import requests
@@ -82,7 +83,7 @@ def insert_data(
         col_name: str = typer.Option(None, help='Optional collection name. If not provided, "subject" will be used.')
 ):
     col_name = col_name or subject
-    inserter: type(AbstractDatabaseInserter) = inserters[subject]
+    inserter: AbstractDatabaseInserter = inserters[subject]
     inserter(
         subject=subject,
         base_dir=base_dir,
@@ -392,6 +393,8 @@ class AbstractVarianceComputer(ABC):
                 out[key]['sum'] += values['sum']
                 out[key]['ssum'] += values['ssum']
                 out[key]['count'] += values['count']
+        with open(self.output_path, 'w') as f:
+            json.dump(out, f, indent=2)
     
     
             
@@ -410,8 +413,8 @@ class mRNAVarianceComputer(AbstractVarianceComputer):
             val = self.tofloat(item[-1])
             if val is not None:
                 out[item[0]]['count'] += 1
-                out[item[0]]['sum'] = np.nansum((out[item[0]]['sum'], float(item[-1])))
-                out[item[0]]['ssum'] = np.nansum((out[item[0]]['ssum'], float(item[-1])**2))
+                out[item[0]]['sum'] = val
+                out[item[0]]['ssum'] = val ** 2
             
         return out
     
@@ -430,8 +433,8 @@ class DNAmVarianceComputer(AbstractVarianceComputer):
             val = self.tofloat(item[-1])
             if val is not None:
                 out[item[0]]['count'] += 1
-                out[item[0]]['sum'] = np.nansum((out[item[0]]['sum'], float(item[-1])))
-                out[item[0]]['ssum'] = np.nansum((out[item[0]]['ssum'], float(item[-1])**2))
+                out[item[0]]['sum'] = val
+                out[item[0]]['ssum'] = val ** 2
             
         return out
     
