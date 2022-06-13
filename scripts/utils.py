@@ -129,14 +129,16 @@ class AbstractDatabaseInserter(ABC):
                    IndexModel([('sample', pymongo.ASCENDING), ('name', pymongo.ASCENDING)]),
                    IndexModel([('sample', pymongo.ASCENDING), ('patient', pymongo.ASCENDING)])
                    ]
-
+        self.col.create_indexes(indexes)
+        
         for patient, file_path in tqdm(self.patient_file_map.items()):
             if not Path(file_path).is_file():
                 logger.error(f'Unable to insert files for {patient}:{file_path}')
                 continue
             self.insert_patient_data(patient=patient, file_path=file_path)
-        self.col.create_indexes(indexes)
-
+        
+        
+        
     @abstractmethod
     def insert_patient_data(self, patient: str, file_path: str):
         ...
@@ -263,6 +265,11 @@ class miRNADatabaseInserter(AbstractDatabaseInserter):
 
 
 class DNAMethylationDatabaseInserter(AbstractDatabaseInserter):
+    def __init__(self, subject: str, base_dir: str, mongo_connection_string: str, db_name: str, col_name: str, override: bool = False):
+        self._genes = set(pd.read_csv(Path(__file__).parent.joinpath('../DNAm_genes.csv'))['gene'].tolist())
+        super().__init__(subject, base_dir, mongo_connection_string, db_name, col_name, override)
+        
+        
     def insert_patient_data(self, patient: str, file_path: str):
         with open(file_path) as f:
             reader = csv.reader(f, delimiter='\t')
@@ -279,6 +286,8 @@ class DNAMethylationDatabaseInserter(AbstractDatabaseInserter):
                     raise ValueError
 
         for sample, row in enumerate(data[6:]):
+            if row[0] not in self._genes:
+                continue
             samples.append(
                 {'name': row[0], 'value': convert_to_float(row[1]), 'patient': patient}
             )
